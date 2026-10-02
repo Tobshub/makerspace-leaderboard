@@ -8,7 +8,13 @@ import { fmt, ordinal, qualifiers, standings } from "../logic";
 import * as store from "../store";
 import { STAGE_LABEL, type Activity, type StageId } from "../types";
 
-export default function StagePage({ activity: a, stageId }: { activity: Activity; stageId: StageId }) {
+export default function StagePage({
+  activity: a,
+  stageId,
+}: {
+  activity: Activity;
+  stageId: StageId;
+}) {
   const stage = a.stages[stageId];
 
   // Whatever the operator is looking at is what the audience display shows.
@@ -71,6 +77,15 @@ function Setup({ a, stageId }: { a: Activity; stageId: StageId }) {
   };
   const start = () => teams.length && store.startRace(a.id, stageId);
 
+  // Teams already entered in the other round(s) of this activity, not yet in this one.
+  const taken = new Set(stage.teams.map((t) => t.name.trim().toLowerCase()));
+  const otherRounds = (["r1", "r2"] as const).filter((id) => id !== stageId);
+  const reusable = otherRounds.flatMap((id) =>
+    a.stages[id].teams
+      .filter((t) => t.name.trim() && !taken.has(t.name.trim().toLowerCase()))
+      .map((t) => ({ ...t, from: id }))
+  );
+
   useKeys(
     (e) => {
       if (e.code === "Space") {
@@ -131,7 +146,9 @@ function Setup({ a, stageId }: { a: Activity; stageId: StageId }) {
                     <span className="roster__n">{String(i + 1).padStart(2, "0")}</span>
                     {isFinal ? (
                       <>
-                        <span style={{ flex: 1, fontSize: 17, fontWeight: 500, padding: "6px 8px" }}>
+                        <span
+                          style={{ flex: 1, fontSize: 17, fontWeight: 500, padding: "6px 8px" }}
+                        >
                           {t.name}
                         </span>
                         <span className="roster__src">{source(t.id)}</span>
@@ -175,55 +192,117 @@ function Setup({ a, stageId }: { a: Activity; stageId: StageId }) {
           </div>
 
           {!isFinal && (
-            <div className="console">
-              <div className="console__bar">
-                <div className="dots">
-                  <i />
-                  <i />
-                  <i />
-                </div>
-                <span className="path">~/add-team</span>
-              </div>
-              <div className="console__body">
-                <form onSubmit={add}>
-                  <div className="field">
-                    <label htmlFor="tname">Team name</label>
-                    <input
-                      id="tname"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="e.g. Team Voltron"
-                      autoComplete="off"
-                      autoFocus
-                    />
+            <div className="side-stack">
+              <div className="console">
+                <div className="console__bar">
+                  <div className="dots">
+                    <i />
+                    <i />
+                    <i />
                   </div>
-                  <button className="btn btn--accent" type="submit" style={{ width: "100%" }}>
-                    Add team <span className="arr">→</span>
-                  </button>
-                </form>
-                <div style={{ marginTop: 16 }}>
-                  {showBulk ? (
-                    <>
-                      <div className="field">
-                        <label htmlFor="bulk">Paste teams (one per line)</label>
-                        <textarea id="bulk" value={bulk} onChange={(e) => setBulk(e.target.value)} />
-                      </div>
-                      <div className="row">
-                        <button className="btn btn--sm" onClick={addBulk}>
-                          Add all
-                        </button>
-                        <button className="btn btn--sm btn--ghost" onClick={() => setShowBulk(false)}>
-                          Cancel
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <button className="btn btn--sm btn--ghost" onClick={() => setShowBulk(true)}>
-                      + Paste a list
+                  <span className="path">~/add-team</span>
+                </div>
+                <div className="console__body">
+                  <form onSubmit={add}>
+                    <div className="field">
+                      <label htmlFor="tname">Team name</label>
+                      <input
+                        id="tname"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="e.g. Team Voltron"
+                        autoComplete="off"
+                        autoFocus
+                        list="known-teams"
+                      />
+                      <datalist id="known-teams">
+                        {reusable.map((t) => (
+                          <option key={t.id} value={t.name} />
+                        ))}
+                      </datalist>
+                    </div>
+                    <button className="btn btn--accent" type="submit" style={{ width: "100%" }}>
+                      Add team <span className="arr">→</span>
                     </button>
-                  )}
+                  </form>
+                  <div style={{ marginTop: 16 }}>
+                    {showBulk ? (
+                      <>
+                        <div className="field">
+                          <label htmlFor="bulk">Paste teams (one per line)</label>
+                          <textarea
+                            id="bulk"
+                            value={bulk}
+                            onChange={(e) => setBulk(e.target.value)}
+                          />
+                        </div>
+                        <div className="row">
+                          <button className="btn btn--sm" onClick={addBulk}>
+                            Add all
+                          </button>
+                          <button
+                            className="btn btn--sm btn--ghost"
+                            onClick={() => setShowBulk(false)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <button className="btn btn--sm btn--ghost" onClick={() => setShowBulk(true)}>
+                        + Paste a list
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
+
+              {reusable.length > 0 && (
+                <div className="console">
+                  <div className="console__bar">
+                    <div className="dots">
+                      <i />
+                      <i />
+                      <i />
+                    </div>
+                    <span className="path">
+                      ~/from-
+                      {otherRounds
+                        .map((id) => STAGE_LABEL[id].toLowerCase().replace(" ", "-"))
+                        .join("+")}
+                    </span>
+                  </div>
+                  <div className="console__body">
+                    <label className="field-label">
+                      From {otherRounds.map((id) => STAGE_LABEL[id]).join(" & ")} · click to add
+                    </label>
+                    <div className="chips">
+                      {reusable.map((t) => (
+                        <button
+                          key={t.id}
+                          className="chip"
+                          onClick={() => store.addTeams(a.id, stageId, [t.name])}
+                        >
+                          <span aria-hidden>+</span> {t.name}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      className="btn btn--sm"
+                      style={{ marginTop: 16 }}
+                      onClick={() =>
+                        store.addTeams(
+                          a.id,
+                          stageId,
+                          reusable.map((t) => t.name)
+                        )
+                      }
+                    >
+                      Add all {reusable.length}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -276,7 +355,10 @@ function Race({ a, stageId }: { a: Activity; stageId: StageId }) {
   );
 
   const endRace = () => {
-    if (remaining && !confirm(`End the race now? ${remaining} team(s) still running will be marked DNF.`))
+    if (
+      remaining &&
+      !confirm(`End the race now? ${remaining} team(s) still running will be marked DNF.`)
+    )
       return;
     store.endRace(a.id, stageId);
   };
@@ -394,9 +476,7 @@ function Results({ a, stageId }: { a: Activity; stageId: StageId }) {
               </span>
               <h1 className="display">Leaderboard</h1>
               {!isFinal && (
-                <p className="lead">
-                  Top {a.settings.advance} qualify for the main race.
-                </p>
+                <p className="lead">Top {a.settings.advance} qualify for the main race.</p>
               )}
             </div>
             {next && (

@@ -802,6 +802,45 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+.side-stack {
+  display: grid;
+  gap: 20px;
+}
+.field-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+  display: block;
+  margin-bottom: 12px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 2px;
+  background: var(--bg-2);
+  color: var(--text);
+  transition: all 0.2s ease;
+}
+.chip span {
+  font-family: var(--font-mono);
+  color: var(--accent);
+}
+.chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 .roster {
   list-style: none;
   margin: 0;
