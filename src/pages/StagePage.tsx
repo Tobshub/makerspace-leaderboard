@@ -5,7 +5,17 @@ import Shell from "../components/Shell";
 import { DownIcon, TrashIcon, UpIcon } from "../components/Icons";
 import { go, useKeys, useNow } from "../hooks";
 import { useSensorStatus } from "../sensors";
-import { fmt, ordinal, qualifiers, sensorsForLane, standings } from "../logic";
+import {
+  finalistIds,
+  finalistSource,
+  fmt,
+  ordinal,
+  roundsDone,
+  sensorsForLane,
+  stageLocked,
+  standings,
+  suggestedFinalists,
+} from "../logic";
 import * as store from "../store";
 import { STAGE_LABEL, type Activity, type StageId } from "../types";
 
@@ -24,7 +34,7 @@ export default function StagePage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [a.id, stageId]);
 
-  const locked = stageId === "final" && stage.status === "setup" && qualifiers(a).length === 0;
+  const locked = stageLocked(a, stageId);
 
   return (
     <Shell
@@ -60,7 +70,7 @@ export default function StagePage({
 function Setup({ a, stageId }: { a: Activity; stageId: StageId }) {
   const stage = a.stages[stageId];
   const isFinal = stageId === "final";
-  const teams = isFinal ? qualifiers(a) : stage.teams;
+  const teams = stage.teams;
   const [name, setName] = useState("");
   const [bulk, setBulk] = useState("");
   const [showBulk, setShowBulk] = useState(false);
@@ -97,15 +107,6 @@ function Setup({ a, stageId }: { a: Activity; stageId: StageId }) {
     [teams.length, a.id, stageId]
   );
 
-  // Where each finalist qualified from, e.g. "Round 1 · 1st".
-  const source = (teamId: string) => {
-    for (const id of ["r1", "r2"] as const) {
-      const r = standings(a.stages[id], a.settings).find((x) => x.team.id === teamId);
-      if (r) return `${STAGE_LABEL[id]} · ${ordinal(r.rank!)}`;
-    }
-    return "";
-  };
-
   return (
     <>
       <header className="page-head grid-bg">
@@ -117,7 +118,7 @@ function Setup({ a, stageId }: { a: Activity; stageId: StageId }) {
           <h1 className="display">{isFinal ? "Finalists" : "Add teams"}</h1>
           <p className="lead">
             {isFinal
-              ? `The top ${a.settings.advance} from Round 1 and Round 2 race for the title.`
+              ? "Pick who races for the title. Each round's results are listed in finishing order; the line-up order sets the lanes."
               : "Add every team racing in this round. Lane numbers double as keyboard shortcuts during the race."}
           </p>
         </div>
@@ -138,7 +139,7 @@ function Setup({ a, stageId }: { a: Activity; stageId: StageId }) {
             </div>
             {teams.length === 0 ? (
               <div className="console__body muted mono" style={{ fontSize: 13 }}>
-                No teams yet.
+                {isFinal ? "No finalists picked yet." : "No teams yet."}
               </div>
             ) : (
               <ul className="roster">
@@ -147,52 +148,48 @@ function Setup({ a, stageId }: { a: Activity; stageId: StageId }) {
                     <span className="roster__n">{String(i + 1).padStart(2, "0")}</span>
                     {isFinal ? (
                       <>
-                        <span
-                          style={{ flex: 1, fontSize: 17, fontWeight: 500, padding: "6px 8px" }}
-                        >
-                          {t.name}
-                        </span>
-                        <span className="roster__src">{source(t.id)}</span>
+                        <span className="roster__name">{t.name}</span>
+                        <span className="roster__src">{finalistSource(a, t.id)}</span>
                       </>
                     ) : (
-                      <>
-                        <input
-                          value={t.name}
-                          onChange={(e) => store.renameTeam(a.id, stageId, t.id, e.target.value)}
-                          aria-label={`Team ${i + 1} name`}
-                        />
-                        <button
-                          className="icon-btn"
-                          onClick={() => store.moveTeam(a.id, stageId, t.id, -1)}
-                          disabled={i === 0}
-                          aria-label="Move up"
-                        >
-                          <UpIcon />
-                        </button>
-                        <button
-                          className="icon-btn"
-                          onClick={() => store.moveTeam(a.id, stageId, t.id, 1)}
-                          disabled={i === teams.length - 1}
-                          aria-label="Move down"
-                        >
-                          <DownIcon />
-                        </button>
-                        <button
-                          className="icon-btn icon-btn--danger"
-                          onClick={() => store.removeTeam(a.id, stageId, t.id)}
-                          aria-label="Remove team"
-                        >
-                          <TrashIcon />
-                        </button>
-                      </>
+                      <input
+                        value={t.name}
+                        onChange={(e) => store.renameTeam(a.id, stageId, t.id, e.target.value)}
+                        aria-label={`Team ${i + 1} name`}
+                      />
                     )}
+                    <button
+                      className="icon-btn"
+                      onClick={() => store.moveTeam(a.id, stageId, t.id, -1)}
+                      disabled={i === 0}
+                      aria-label="Move up"
+                    >
+                      <UpIcon />
+                    </button>
+                    <button
+                      className="icon-btn"
+                      onClick={() => store.moveTeam(a.id, stageId, t.id, 1)}
+                      disabled={i === teams.length - 1}
+                      aria-label="Move down"
+                    >
+                      <DownIcon />
+                    </button>
+                    <button
+                      className="icon-btn icon-btn--danger"
+                      onClick={() => store.removeTeam(a.id, stageId, t.id)}
+                      aria-label="Remove team"
+                    >
+                      <TrashIcon />
+                    </button>
                   </li>
                 ))}
               </ul>
             )}
           </div>
 
-          {!isFinal && (
+          {isFinal ? (
+            <FinalistPicker a={a} />
+          ) : (
             <div className="side-stack">
               <div className="console">
                 <div className="console__bar">
@@ -332,6 +329,72 @@ function Setup({ a, stageId }: { a: Activity; stageId: StageId }) {
   );
 }
 
+/** Each round's results in finishing order; click a team to put it in (or take it out of) the main race. */
+function FinalistPicker({ a }: { a: Activity }) {
+  const picked = finalistIds(a);
+  const pickedNames = new Set(a.stages.final.teams.map((t) => t.name.trim().toLowerCase()));
+  const n = a.settings.advance;
+
+  return (
+    <div className="side-stack">
+      <div className="row">
+        <button
+          className="btn btn--sm"
+          onClick={() => store.setFinalists(a.id, suggestedFinalists(a))}
+          title={`Replace the line-up with the top ${n} finishers of each round`}
+        >
+          Pick top {n} of each
+        </button>
+        <button
+          className="btn btn--sm btn--ghost"
+          onClick={() => store.setFinalists(a.id, [])}
+          disabled={!picked.size}
+        >
+          Clear
+        </button>
+      </div>
+
+      {(["r1", "r2"] as const).map((id) => (
+        <div className="console" key={id}>
+          <div className="console__bar">
+            <div className="dots">
+              <i />
+              <i />
+              <i />
+            </div>
+            <span className="path">~/{STAGE_LABEL[id].toLowerCase().replace(" ", "-")}/results</span>
+          </div>
+          <ul className="roster picklist">
+            {standings(a.stages[id], a.settings).map((r) => {
+              const on = picked.has(r.team.id);
+              // Same team raced in both rounds and is already in from the other one.
+              const dupe = !on && pickedNames.has(r.team.name.trim().toLowerCase());
+              return (
+                <li key={r.team.id}>
+                  <button
+                    className={"pick" + (on ? " pick--on" : "")}
+                    onClick={() => store.toggleFinalist(a.id, r.team.id)}
+                    disabled={dupe}
+                    aria-pressed={on}
+                    title={dupe ? "Already picked from the other round" : undefined}
+                  >
+                    <span className="roster__n">{r.rank ? ordinal(r.rank) : "—"}</span>
+                    <span className="pick__name">{r.team.name}</span>
+                    <span className="pick__time">{r.entry.dnf ? "DNF" : fmt(r.totalMs)}</span>
+                    <span className="pick__box" aria-hidden>
+                      {on ? "✓" : ""}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ============================================================
    RACE
    ============================================================ */
@@ -450,7 +513,7 @@ function SensorBadge() {
 
 function Results({ a, stageId }: { a: Activity; stageId: StageId }) {
   const stage = a.stages[stageId];
-  const rows = standings(stage, a.settings);
+  const rows = standings(stage, a.settings, finalistIds(a));
   const isFinal = stageId === "final";
   const winner = isFinal ? rows.find((r) => r.rank === 1) : undefined;
   const finalStarted = a.stages.final.status !== "setup";
@@ -459,8 +522,8 @@ function Results({ a, stageId }: { a: Activity; stageId: StageId }) {
   const next: { label: string; to: string } | null =
     stageId === "r1" && a.stages.r2.status !== "done"
       ? { label: "Go to Round 2", to: `/a/${a.id}/r2` }
-      : !isFinal && qualifiers(a).length && a.stages.final.status !== "done"
-        ? { label: "Go to Main Race", to: `/a/${a.id}/final` }
+      : !isFinal && roundsDone(a) && a.stages.final.status === "setup"
+        ? { label: "Pick finalists", to: `/a/${a.id}/final` }
         : null;
 
   const reset = () => {
@@ -495,7 +558,11 @@ function Results({ a, stageId }: { a: Activity; stageId: StageId }) {
               </span>
               <h1 className="display">Leaderboard</h1>
               {!isFinal && (
-                <p className="lead">Top {a.settings.advance} qualify for the main race.</p>
+                <p className="lead">
+                  {rows.some((r) => r.qualified)
+                    ? "Highlighted teams are in the main race."
+                    : "Finalists are picked by hand once both rounds are done."}
+                </p>
               )}
             </div>
             {next && (

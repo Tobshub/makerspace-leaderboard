@@ -26,7 +26,7 @@ export function Leaderboard({ rows, showQualified }: { rows: Standing[]; showQua
           <span className="brow__name">
             <span>{r.team.name}</span>
             {showQualified && r.qualified && (
-              <span className="badge badge--q">Qualified</span>
+              <span className="badge badge--q">Finalist</span>
             )}
             {r.entry.dnf && <span className="badge">DNF</span>}
           </span>

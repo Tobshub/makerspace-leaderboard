@@ -3,7 +3,7 @@ import SensorLanes from "../components/SensorLanes";
 import Shell from "../components/Shell";
 import { TrashIcon } from "../components/Icons";
 import { go } from "../hooks";
-import { eventPoints, fmt, qualifiers, standings, toCSV } from "../logic";
+import { eventPoints, finalistIds, fmt, stageLocked, standings, toCSV } from "../logic";
 import { deleteActivity, renameActivity, updateSettings } from "../store";
 import { STAGE_LABEL, STAGE_ORDER, type Activity, type StageId } from "../types";
 
@@ -55,7 +55,7 @@ export default function ActivityPage({ activity: a }: { activity: Activity }) {
                 Stages
               </span>
               <h2 className="h3">
-                Top {a.settings.advance} from each round go through to the main race.
+                Run both rounds, then pick who goes through to the main race.
               </h2>
             </div>
           </div>
@@ -132,8 +132,7 @@ export default function ActivityPage({ activity: a }: { activity: Activity }) {
 
 function StageCard({ a, id, n }: { a: Activity; id: StageId; n: number }) {
   const s = a.stages[id];
-  const quals = qualifiers(a);
-  const locked = id === "final" && s.status === "setup" && quals.length === 0;
+  const locked = stageLocked(a, id);
   const href = `#/a/${a.id}/${id}`;
 
   let badge = (
@@ -167,7 +166,7 @@ function StageCard({ a, id, n }: { a: Activity; id: StageId; n: number }) {
   let body: React.ReactNode;
   let cta = "Add teams";
   if (s.status === "done") {
-    const rows = standings(s, a.settings);
+    const rows = standings(s, a.settings, finalistIds(a));
     cta = "View results";
     body = rows.map((r) => (
       <li key={r.team.id} className={r.qualified || (id === "final" && r.rank === 1) ? "q" : ""}>
@@ -185,17 +184,21 @@ function StageCard({ a, id, n }: { a: Activity; id: StageId; n: number }) {
       </li>
     ));
   } else if (id === "final") {
-    cta = "Set up main race";
+    cta = s.teams.length ? "Set up main race" : "Pick finalists";
     body = locked ? (
       <li>
         <span>Unlocks when Round 1 &amp; 2 are complete.</span>
       </li>
-    ) : (
-      quals.map((t) => (
+    ) : s.teams.length ? (
+      s.teams.map((t) => (
         <li key={t.id} className="q">
           <span>{t.name}</span>
         </li>
       ))
+    ) : (
+      <li>
+        <span>No finalists picked yet.</span>
+      </li>
     );
   } else {
     body = s.teams.length ? (
@@ -245,8 +248,6 @@ function SettingsPanel({ a }: { a: Activity }) {
     updateSettings(a.id, { points: list });
     setPoints(list.join(", "));
   };
-  const finalStarted = a.stages.final.status !== "setup";
-
   return (
     <div className="console">
       <div className="console__bar">
@@ -260,19 +261,18 @@ function SettingsPanel({ a }: { a: Activity }) {
       <div className="console__body">
         <div className="settings-grid">
           <div className="field">
-            <label htmlFor="adv">Teams advancing per round</label>
+            <label htmlFor="adv">"Pick top N" per round</label>
             <input
               id="adv"
               type="number"
               min={1}
               max={10}
               value={a.settings.advance}
-              disabled={finalStarted}
               onChange={(e) =>
                 updateSettings(a.id, { advance: Math.max(1, Number(e.target.value) || 1) })
               }
             />
-            {finalStarted && <div className="hint">Locked once the main race has started.</div>}
+            <div className="hint">Shortcut when picking finalists; you choose who goes through.</div>
           </div>
           <div className="field">
             <label htmlFor="pen">Penalty step (seconds)</label>

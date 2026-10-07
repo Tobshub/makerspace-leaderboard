@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
-import { allStopped, newActivity, qualifiers, uid } from "./logic";
-import type { Activity, Settings, StageId } from "./types";
+import { allStopped, newActivity, uid } from "./logic";
+import type { Activity, Settings, StageId, Team } from "./types";
 
 /*
  * All state lives in localStorage so a refresh mid-race loses nothing, and so a second
@@ -141,8 +141,6 @@ export function moveTeam(id: string, stage: StageId, teamId: string, dir: -1 | 1
 export function startRace(id: string, stage: StageId) {
   update(id, (a) => {
     const s = a.stages[stage];
-    // The main race line-up is always the current qualifiers from rounds 1 & 2.
-    if (stage === "final") s.teams = qualifiers(a).map((t) => ({ ...t }));
     if (!s.teams.length) return;
     s.status = "running";
     s.startedAt = Date.now() + a.settings.countdownSec * 1000;
@@ -232,6 +230,30 @@ export function resetStage(id: string, stage: StageId) {
     s.entries = [];
     s.startedAt = null;
     s.endedAt = null;
-    if (stage === "final") s.teams = [];
+  });
+}
+
+/* ---------------- main race picks ---------------- */
+
+/** Add a round team to the main race line-up, or take it out. Finalists keep their round id. */
+export function toggleFinalist(id: string, teamId: string) {
+  update(id, (a) => {
+    const f = a.stages.final;
+    if (f.status !== "setup") return;
+    if (f.teams.some((t) => t.id === teamId)) {
+      f.teams = f.teams.filter((t) => t.id !== teamId);
+      return;
+    }
+    const team = [...a.stages.r1.teams, ...a.stages.r2.teams].find((t) => t.id === teamId);
+    const key = team?.name.trim().toLowerCase();
+    // A team that raced in both rounds only gets one lane.
+    if (!team || f.teams.some((t) => t.name.trim().toLowerCase() === key)) return;
+    f.teams.push({ ...team });
+  });
+}
+
+export function setFinalists(id: string, teams: Team[]) {
+  update(id, (a) => {
+    if (a.stages.final.status === "setup") a.stages.final.teams = teams.map((t) => ({ ...t }));
   });
 }

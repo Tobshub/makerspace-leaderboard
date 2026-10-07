@@ -2,7 +2,7 @@ import Lane from "../components/Lane";
 import { ExpandIcon } from "../components/Icons";
 import { Confetti, Leaderboard, Podium } from "../components/Leaderboard";
 import { useNow } from "../hooks";
-import { fmt, qualifiers, standings } from "../logic";
+import { finalistIds, fmt, standings } from "../logic";
 import { STAGE_LABEL, type Activity } from "../types";
 
 /**
@@ -12,13 +12,13 @@ import { STAGE_LABEL, type Activity } from "../types";
 export default function Display({ activity: a }: { activity: Activity }) {
   const stage = a.stages[a.live];
   const now = useNow(stage.status === "running");
-  const rows = standings(stage, a.settings);
+  const rows = standings(stage, a.settings, finalistIds(a));
   const isFinal = stage.id === "final";
 
   let body: React.ReactNode;
 
   if (stage.status === "setup") {
-    const teams = isFinal ? qualifiers(a) : stage.teams;
+    const teams = stage.teams;
     body = (
       <div className="screen__center">
         <div>

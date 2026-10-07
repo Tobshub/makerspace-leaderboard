@@ -35,7 +35,7 @@ export interface Stage {
 }
 
 export interface Settings {
-  /** Teams from each round that advance to the main race. */
+  /** How many per round "Pick top N" selects for the main race; finalists are chosen by hand. */
   advance: number;
   /** Points awarded by placement; index 0 = 1st place. */
   points: number[];
