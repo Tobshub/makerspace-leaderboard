@@ -3,45 +3,53 @@ import type { FinishEvent } from "../shared/sensor";
 /*
  * ThingsBoard → FinishEvent.
  *
- * The payload shape isn't final yet, so everything that knows about it lives in this file.
- * Assumed shape: a rule-chain "REST API Call" node posting either one message or an array of them:
+ * Everything that knows about the ThingsBoard payload lives in this file.
  *
- *   {
- *     "deviceName": "finish-gate-1",
- *     "ts": 1759680000000,                       // when the sensor fired (epoch ms), optional
- *     "telemetry": { "lane": 3, "triggered": true }
- *   }
+ * The ESP32 finish gate (see the "ESP32 Makerspace Dashboard") reports one telemetry key per
+ * sensor, `sensor<N>:detection_time`, and sensor N watches lane N. A rule-chain
+ * "REST API Call" node forwards the telemetry message body, which is either flat or in
+ * ThingsBoard's timestamped form, and may be batched in an array:
  *
- * Messages with `triggered: false` or without a valid lane are ignored.
+ *   { "sensor3:detection_time": 1759680004210 }
+ *   { "ts": 1759680004215, "values": { "sensor3:detection_time": 1759680004210 } }
+ *
+ * A value that looks like an epoch timestamp (ms) is used as the finish time. Anything else
+ * (e.g. millis() since boot) can't be placed on our clock, so the arrival time is used instead.
+ * Zero/empty values mean "nothing detected" and are skipped. The device may resend every key
+ * on each report; the event id is derived from the value so repeats are dropped downstream.
  */
 
-interface ThingsBoardMessage {
-  deviceName?: unknown;
-  ts?: unknown;
-  telemetry?: { lane?: unknown; triggered?: unknown };
-}
+const SENSOR_KEY = /^sensor(\d+):detection_time$/;
+
+/** Anything after 2001-09-09 in epoch ms; millis()-since-boot values are far smaller. */
+const looksLikeEpochMs = (n: number) => n > 1e12;
 
 export function toFinishEvents(body: unknown, receivedAt = Date.now()): FinishEvent[] {
-  const messages = (Array.isArray(body) ? body : [body]) as ThingsBoardMessage[];
+  const messages = Array.isArray(body) ? body : [body];
   const events: FinishEvent[] = [];
 
   for (const m of messages) {
-    if (!m || typeof m !== "object" || !m.telemetry) continue;
-    const lane = Number(m.telemetry.lane);
-    if (!Number.isInteger(lane) || lane < 1) continue;
-    if (m.telemetry.triggered === false) continue;
+    if (!m || typeof m !== "object") continue;
+    const values: Record<string, unknown> =
+      "values" in m && m.values && typeof m.values === "object" ? m.values : m;
+    const device =
+      "deviceName" in m && typeof m.deviceName === "string" ? m.deviceName : "esp32";
 
-    const ts = Number(m.ts);
-    const at = Number.isFinite(ts) && ts > 0 ? ts : null;
-    const device = typeof m.deviceName === "string" ? m.deviceName : "unknown";
+    for (const [key, raw] of Object.entries(values)) {
+      const match = SENSOR_KEY.exec(key);
+      if (!match) continue;
+      const lane = Number(match[1]);
+      const value = Number(raw);
+      if (lane < 1 || !Number.isFinite(value) || value <= 0) continue;
 
-    events.push({
-      id: at ? `${device}:${lane}:${at}` : crypto.randomUUID(),
-      lane,
-      at,
-      receivedAt,
-      device,
-    });
+      events.push({
+        id: `${device}:${lane}:${value}`,
+        lane,
+        at: looksLikeEpochMs(value) ? value : null,
+        receivedAt,
+        device,
+      });
+    }
   }
   return events;
 }

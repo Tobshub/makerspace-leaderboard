@@ -74,8 +74,12 @@ export class SensorHub extends DurableObject<Env> {
 
   async publish(events: FinishEvent[]) {
     const recent = (await this.ctx.storage.get<FinishEvent[]>("recent")) ?? [];
-    await this.ctx.storage.put("recent", [...recent, ...events].slice(-RECENT));
-    const msg = JSON.stringify(events);
+    // Devices may resend unchanged readings; only pass on ones we haven't seen.
+    const known = new Set(recent.map((e) => e.id));
+    const fresh = events.filter((e) => !known.has(e.id) && known.add(e.id));
+    if (!fresh.length) return;
+    await this.ctx.storage.put("recent", [...recent, ...fresh].slice(-RECENT));
+    const msg = JSON.stringify(fresh);
     for (const ws of this.ctx.getWebSockets()) {
       try {
         ws.send(msg);
