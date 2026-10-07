@@ -19,6 +19,8 @@ export interface Entry {
   finishMs: number | null;
   dnf: boolean;
   penaltyMs: number;
+  /** Stopped automatically by a finish-line sensor rather than by hand. */
+  bySensor?: boolean;
 }
 
 export type StageStatus = "setup" | "running" | "done";

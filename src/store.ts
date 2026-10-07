@@ -53,6 +53,9 @@ function subscribe(cb: () => void) {
   };
 }
 
+/** Current state, for code outside React (e.g. the sensor feed). */
+export const getActivities = read;
+
 export function useActivities() {
   return useSyncExternalStore(subscribe, read);
 }
@@ -157,13 +160,20 @@ function finishIfDone(a: Activity, stage: StageId) {
   }
 }
 
-export function stopTeam(id: string, stage: StageId, teamId: string, at = Date.now()) {
+export function stopTeam(
+  id: string,
+  stage: StageId,
+  teamId: string,
+  at = Date.now(),
+  source: "manual" | "sensor" = "manual"
+) {
   update(id, (a) => {
     const s = a.stages[stage];
     const e = s.entries.find((x) => x.teamId === teamId);
     if (s.status !== "running" || !e || e.finishMs != null || e.dnf || s.startedAt == null) return;
     if (at < s.startedAt) return; // still counting down
     e.finishMs = at - s.startedAt;
+    e.bySensor = source === "sensor";
     finishIfDone(a, stage);
   });
 }
@@ -185,6 +195,7 @@ export function undoStop(id: string, stage: StageId, teamId: string) {
     if (!e) return;
     e.finishMs = null;
     e.dnf = false;
+    e.bySensor = false;
   });
 }
 

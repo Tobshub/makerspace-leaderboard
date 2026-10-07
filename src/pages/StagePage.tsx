@@ -4,6 +4,7 @@ import { Confetti, Leaderboard, Podium } from "../components/Leaderboard";
 import Shell from "../components/Shell";
 import { DownIcon, TrashIcon, UpIcon } from "../components/Icons";
 import { go, useKeys, useNow } from "../hooks";
+import { useSensorStatus } from "../sensors";
 import { fmt, ordinal, qualifiers, standings } from "../logic";
 import * as store from "../store";
 import { STAGE_LABEL, type Activity, type StageId } from "../types";
@@ -380,6 +381,8 @@ function Race({ a, stageId }: { a: Activity; stageId: StageId }) {
           </div>
         </div>
         <div className="mono muted" style={{ fontSize: 13, textAlign: "right" }}>
+          <SensorBadge />
+          <br />
           {stage.teams.length - remaining}/{stage.teams.length} finished
           <br />
           Keys <kbd>1</kbd>–<kbd>{Math.min(stage.teams.length, 9)}</kbd>
@@ -422,6 +425,21 @@ function Race({ a, stageId }: { a: Activity; stageId: StageId }) {
         </button>
       </div>
     </div>
+  );
+}
+
+function SensorBadge() {
+  const status = useSensorStatus();
+  const label = { online: "Sensors live", connecting: "Sensors connecting", offline: "Sensors offline" };
+  return (
+    <span
+      className={"badge" + (status === "online" ? " badge--done" : "")}
+      style={{ marginBottom: 10 }}
+      title="Finish-line sensors stop lanes automatically while connected"
+    >
+      <span className="dot" />
+      {label[status]}
+    </span>
   );
 }
 

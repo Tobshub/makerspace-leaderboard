@@ -6,6 +6,7 @@ import ActivityPage from "./pages/ActivityPage";
 import Display from "./pages/Display";
 import Home from "./pages/Home";
 import StagePage from "./pages/StagePage";
+import { connectSensors } from "./sensors";
 import { useActivity } from "./store";
 import { STAGE_ORDER, type StageId } from "./types";
 import "./index.css";
@@ -38,6 +39,8 @@ function App() {
     return <StagePage key={stage} activity={activity} stageId={stage as StageId} />;
   return <ActivityPage activity={activity} />;
 }
+
+connectSensors();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

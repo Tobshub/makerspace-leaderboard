@@ -41,7 +41,13 @@ export default function Lane({
         <span className="lane__pos">
           {stopped && position ? ordinal(position) : entry.dnf ? "DNF" : `Lane ${index + 1}`}
         </span>
-        {controls && key && <span className="lane__key">{key}</span>}
+        {stopped && entry.bySensor ? (
+          <span className="lane__key" title="Stopped by the finish-line sensor">
+            Sensor
+          </span>
+        ) : (
+          controls && key && <span className="lane__key">{key}</span>
+        )}
       </div>
       <h3 className="lane__name" title={team.name}>
         {team.name}
