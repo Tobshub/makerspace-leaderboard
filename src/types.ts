@@ -43,6 +43,11 @@ export interface Settings {
   penaltySec: number;
   /** 3-2-1 countdown before the clock starts; 0 disables it. */
   countdownSec: number;
+  /**
+   * Which lane each finish-line sensor stops: index 0 = sensor 1, value = 1-based lane,
+   * null = sensor ignored. Missing (older activities) means sensor N → lane N.
+   */
+  sensorLanes?: (number | null)[];
 }
 
 export interface Activity {

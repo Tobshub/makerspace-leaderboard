@@ -1,6 +1,8 @@
 import { useState } from "react";
+import SensorLanes from "../components/SensorLanes";
 import Shell from "../components/Shell";
 import { go } from "../hooks";
+import { DEFAULT_SETTINGS } from "../logic";
 import { createActivity, useActivities } from "../store";
 import { STAGE_LABEL, STAGE_ORDER, type Activity } from "../types";
 
@@ -15,10 +17,11 @@ function progress(a: Activity) {
 export default function Home() {
   const activities = useActivities();
   const [name, setName] = useState("");
+  const [sensorLanes, setSensorLanes] = useState(DEFAULT_SETTINGS.sensorLanes!);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const id = createActivity(name);
+    const id = createActivity(name, { sensorLanes });
     setName("");
     go(`/a/${id}`);
   };
@@ -65,6 +68,7 @@ export default function Home() {
                   autoComplete="off"
                 />
               </div>
+              <SensorLanes value={sensorLanes} onChange={setSensorLanes} />
               <button className="btn btn--accent" type="submit" style={{ width: "100%" }}>
                 Add activity <span className="arr">→</span>
               </button>

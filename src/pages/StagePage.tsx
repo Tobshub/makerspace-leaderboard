@@ -5,7 +5,7 @@ import Shell from "../components/Shell";
 import { DownIcon, TrashIcon, UpIcon } from "../components/Icons";
 import { go, useKeys, useNow } from "../hooks";
 import { useSensorStatus } from "../sensors";
-import { fmt, ordinal, qualifiers, standings } from "../logic";
+import { fmt, ordinal, qualifiers, sensorsForLane, standings } from "../logic";
 import * as store from "../store";
 import { STAGE_LABEL, type Activity, type StageId } from "../types";
 
@@ -405,6 +405,7 @@ function Race({ a, stageId }: { a: Activity; stageId: StageId }) {
             entry={entry(t.id)}
             elapsed={elapsed}
             position={ranks.get(t.id) ?? null}
+            sensors={sensorsForLane(a.settings, i + 1)}
             controls={{
               penaltySec: a.settings.penaltySec,
               onStop: () => store.stopTeam(a.id, stageId, t.id, Date.now()),

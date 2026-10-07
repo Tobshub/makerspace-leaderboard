@@ -1,4 +1,5 @@
 import { useState } from "react";
+import SensorLanes from "../components/SensorLanes";
 import Shell from "../components/Shell";
 import { TrashIcon } from "../components/Icons";
 import { go } from "../hooks";
@@ -311,6 +312,12 @@ function SettingsPanel({ a }: { a: Activity }) {
             onKeyDown={(e) => e.key === "Enter" && commitPoints()}
           />
           <div className="hint">Placements past the end of this list score 0. DNF scores 0.</div>
+        </div>
+        <div style={{ marginTop: 24 }}>
+          <SensorLanes
+            value={a.settings.sensorLanes}
+            onChange={(sensorLanes) => updateSettings(a.id, { sensorLanes })}
+          />
         </div>
       </div>
     </div>

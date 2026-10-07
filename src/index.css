@@ -419,6 +419,7 @@ button:disabled {
 }
 .input,
 .field input,
+.field select,
 .field textarea {
   width: 100%;
   background: var(--bg-2);
@@ -432,6 +433,7 @@ button:disabled {
 }
 .input:focus,
 .field input:focus,
+.field select:focus,
 .field textarea:focus {
   outline: none;
   border-color: var(--accent);
@@ -814,6 +816,28 @@ button:disabled {
   color: var(--dim);
   display: block;
   margin-bottom: 12px;
+}
+.sensor-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.field .sensor-pick {
+  margin: 0;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.sensor-pick span {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--faint);
+  margin-bottom: 6px;
+}
+.field .sensor-pick select {
+  padding: 10px 8px;
+  font-size: 13px;
+  cursor: pointer;
 }
 .chips {
   display: flex;

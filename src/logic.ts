@@ -1,3 +1,4 @@
+import { SENSOR_COUNT } from "../shared/sensor";
 import { STAGE_LABEL } from "./types";
 import type { Activity, Settings, Stage, StageId, Standing, Team } from "./types";
 
@@ -6,7 +7,21 @@ export const DEFAULT_SETTINGS: Settings = {
   points: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1],
   penaltySec: 5,
   countdownSec: 3,
+  sensorLanes: Array.from({ length: SENSOR_COUNT }, (_, i) => i + 1),
 };
+
+/** Lane (1-based) that a sensor stops in this activity, or null if it's switched off. */
+export function laneForSensor(settings: Settings, sensor: number): number | null {
+  const lanes = settings.sensorLanes;
+  return lanes && sensor - 1 < lanes.length ? lanes[sensor - 1] : sensor;
+}
+
+/** Sensors (1-based) mapped to a lane, for showing on lane cards. */
+export function sensorsForLane(settings: Settings, lane: number): number[] {
+  const out: number[] = [];
+  for (let s = 1; s <= SENSOR_COUNT; s++) if (laneForSensor(settings, s) === lane) out.push(s);
+  return out;
+}
 
 export function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -16,12 +31,12 @@ export function emptyStage(id: StageId): Stage {
   return { id, status: "setup", teams: [], entries: [], startedAt: null, endedAt: null };
 }
 
-export function newActivity(name: string): Activity {
+export function newActivity(name: string, settings: Partial<Settings> = {}): Activity {
   return {
     id: uid(),
     name,
     createdAt: Date.now(),
-    settings: { ...DEFAULT_SETTINGS, points: [...DEFAULT_SETTINGS.points] },
+    settings: structuredClone({ ...DEFAULT_SETTINGS, ...settings }),
     stages: { r1: emptyStage("r1"), r2: emptyStage("r2"), final: emptyStage("final") },
     live: "r1",
   };

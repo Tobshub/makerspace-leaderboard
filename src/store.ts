@@ -78,8 +78,8 @@ function update(id: string, fn: (a: Activity) => void) {
 
 /* ---------------- activities ---------------- */
 
-export function createActivity(name: string) {
-  const a = newActivity(name.trim() || "Untitled activity");
+export function createActivity(name: string, settings: Partial<Settings> = {}) {
+  const a = newActivity(name.trim() || "Untitled activity", settings);
   write([a, ...read()]);
   return a.id;
 }

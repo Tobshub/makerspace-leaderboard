@@ -6,7 +6,7 @@ import type { FinishEvent } from "../shared/sensor";
  * Everything that knows about the ThingsBoard payload lives in this file.
  *
  * The ESP32 finish gate (see the "ESP32 Makerspace Dashboard") reports one telemetry key per
- * sensor, `sensor<N>:detection_time`, and sensor N watches lane N. A rule-chain
+ * sensor, `sensor<N>:detection_time` (which lane each sensor stops is set per activity). A rule-chain
  * "REST API Call" node forwards the telemetry message body, which is either flat or in
  * ThingsBoard's timestamped form, and may be batched in an array:
  *
@@ -38,13 +38,13 @@ export function toFinishEvents(body: unknown, receivedAt = Date.now()): FinishEv
     for (const [key, raw] of Object.entries(values)) {
       const match = SENSOR_KEY.exec(key);
       if (!match) continue;
-      const lane = Number(match[1]);
+      const sensor = Number(match[1]);
       const value = Number(raw);
-      if (lane < 1 || !Number.isFinite(value) || value <= 0) continue;
+      if (sensor < 1 || !Number.isFinite(value) || value <= 0) continue;
 
       events.push({
-        id: `${device}:${lane}:${value}`,
-        lane,
+        id: `${device}:${sensor}:${value}`,
+        sensor,
         at: looksLikeEpochMs(value) ? value : null,
         receivedAt,
         device,

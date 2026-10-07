@@ -15,6 +15,7 @@ export default function Lane({
   entry,
   elapsed,
   position,
+  sensors = [],
   controls,
 }: {
   index: number;
@@ -24,6 +25,8 @@ export default function Lane({
   elapsed: number;
   /** Provisional finishing position, if stopped. */
   position: number | null;
+  /** Finish-line sensors that stop this lane. */
+  sensors?: number[];
   controls?: LaneControls;
 }) {
   const stopped = entry.finishMs != null;
@@ -39,7 +42,11 @@ export default function Lane({
     >
       <div className="lane__top">
         <span className="lane__pos">
-          {stopped && position ? ordinal(position) : entry.dnf ? "DNF" : `Lane ${index + 1}`}
+          {stopped && position
+            ? ordinal(position)
+            : entry.dnf
+              ? "DNF"
+              : `Lane ${index + 1}` + (sensors.length ? ` · Sensor ${sensors.join(", ")}` : "")}
         </span>
         {stopped && entry.bySensor ? (
           <span className="lane__key" title="Stopped by the finish-line sensor">

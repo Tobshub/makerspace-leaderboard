@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { FinishEvent } from "../shared/sensor";
-import { fmt } from "./logic";
+import { fmt, laneForSensor } from "./logic";
 import { getActivities, stopTeam } from "./store";
 import { STAGE_LABEL } from "./types";
 
@@ -39,14 +39,16 @@ export function useSensorStatus() {
 }
 
 /**
- * Turn an event into a stop. Lane N is the Nth team of whichever race is running (the most
- * recently started one if, unusually, several are). The sensor's own timestamp is used when it's
- * plausible for this race; otherwise the time it reached the server.
+ * Turn an event into a stop. The activity's sensor map picks the lane, and lane N is the Nth
+ * team of whichever race is running (the most recently started one if, unusually, several are).
+ * The sensor's own timestamp is used when it's plausible for this race; otherwise the time it
+ * reached the server.
  */
 function apply(ev: FinishEvent) {
   if (seen.has(ev.id)) return;
   seen.add(ev.id);
-  const tag = `lane ${ev.lane} (${ev.device})`;
+  if (!Number.isInteger(ev.sensor)) return log.warn("dropped event in an unknown format", ev);
+  const tag = `sensor ${ev.sensor} (${ev.device})`;
   const skip = (why: string) => log.info(`ignored ${tag}: ${why}`, ev);
 
   if (location.hash.startsWith("#/display")) return skip("audience display doesn't apply stops");
@@ -59,8 +61,10 @@ function apply(ev: FinishEvent) {
 
   const { a, s } = running;
   const startedAt = s.startedAt!;
-  const team = s.teams[ev.lane - 1];
-  if (!team) return skip(`race only has ${s.teams.length} lanes`);
+  const lane = laneForSensor(a.settings, ev.sensor);
+  if (lane == null) return skip(`switched off for ${a.name}`);
+  const team = s.teams[lane - 1];
+  if (!team) return skip(`mapped to lane ${lane}, but the race only has ${s.teams.length} lanes`);
   const entry = s.entries.find((e) => e.teamId === team.id);
   if (entry?.dnf) return skip(`${team.name} is already DNF`);
   if (entry?.finishMs != null) return skip(`${team.name} already stopped at ${fmt(entry.finishMs)}`);
@@ -82,7 +86,7 @@ function apply(ev: FinishEvent) {
 
   stopTeam(a.id, s.id, team.id, at, "sensor");
   log.info(
-    `stopped ${team.name} on ${tag} at ${fmt(at - startedAt)} (${clock}, ` +
+    `stopped ${team.name} (lane ${lane}) from ${tag} at ${fmt(at - startedAt)} (${clock}, ` +
       `${now - ev.receivedAt}ms after the server got it) · ${a.name} / ${STAGE_LABEL[s.id]}`
   );
 }

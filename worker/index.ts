@@ -41,7 +41,7 @@ export default {
       const result = await hub(env).publish(events);
       log("info", "ingest.ok", {
         payload: clip(raw),
-        lanes: events.map((e) => e.lane),
+        sensors: events.map((e) => e.sensor),
         ...result,
       });
       return Response.json({ accepted: events.length, ...result }, { status: 202 });
@@ -123,7 +123,7 @@ export class SensorHub extends DurableObject<Env> {
         /* socket already closing */
       }
     }
-    if (!result.clients) log("warn", "publish.no_clients", { lanes: fresh.map((e) => e.lane) });
+    if (!result.clients) log("warn", "publish.no_clients", { sensors: fresh.map((e) => e.sensor) });
     return result;
   }
 
