@@ -6,9 +6,12 @@
   "packageManager": "pnpm@11.8.0",
   "scripts": {
     "dev": "vite --port=3001 --host=0.0.0.0",
-    "build": "tsc --noEmit && vite build",
+    "dev:api": "wrangler dev --port=8787",
+    "build": "pnpm lint && vite build",
     "preview": "vite preview",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit && tsc --noEmit -p worker",
+    "deploy": "pnpm build && wrangler deploy",
+    "cf-types": "wrangler types worker/worker-configuration.d.ts"
   },
   "dependencies": {
     "react": "^19.3.0",

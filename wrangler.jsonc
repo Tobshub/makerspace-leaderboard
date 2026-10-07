@@ -1,9 +1,17 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "makerspace-leaderboard",
+  "main": "worker/index.ts",
   "compatibility_date": "2026-10-05",
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
-  }
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "SENSOR_HUB", "class_name": "SensorHub" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SensorHub"] }]
+  // Secret: INGEST_KEY — `wrangler secret put INGEST_KEY` (locally, put it in .dev.vars)
 }
