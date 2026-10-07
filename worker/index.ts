@@ -14,25 +14,42 @@ export default {
 
     if (url.pathname === "/api/thingsboard") {
       if (req.method !== "POST") return text("Method not allowed", 405);
-      if (!env.INGEST_KEY) return text("INGEST_KEY is not configured", 500);
+      if (!env.INGEST_KEY) {
+        log("error", "ingest.unconfigured", {});
+        return text("INGEST_KEY is not configured", 500);
+      }
       const key = req.headers.get("x-api-key") ?? url.searchParams.get("key") ?? "";
-      if (!safeEqual(key, env.INGEST_KEY)) return text("Unauthorized", 401);
+      if (!safeEqual(key, env.INGEST_KEY)) {
+        log("warn", "ingest.unauthorized", { keyProvided: key !== "", ip: clientIp(req) });
+        return text("Unauthorized", 401);
+      }
 
+      const raw = await req.text();
       let body: unknown;
       try {
-        body = await req.json();
+        body = JSON.parse(raw);
       } catch {
+        log("warn", "ingest.bad_json", { payload: clip(raw) });
         return text("Body must be JSON", 400);
       }
       const events = toFinishEvents(body);
-      if (!events.length) return text("No finish events in payload", 422);
+      if (!events.length) {
+        log("warn", "ingest.no_events", { payload: clip(raw) });
+        return text("No finish events in payload", 422);
+      }
 
-      await hub(env).publish(events);
-      return Response.json({ accepted: events.length }, { status: 202 });
+      const result = await hub(env).publish(events);
+      log("info", "ingest.ok", {
+        payload: clip(raw),
+        lanes: events.map((e) => e.lane),
+        ...result,
+      });
+      return Response.json({ accepted: events.length, ...result }, { status: 202 });
     }
 
     if (url.pathname === "/api/events") {
       if (req.headers.get("upgrade") !== "websocket") return text("Expected WebSocket", 426);
+      log("info", "ws.connect", { ip: clientIp(req), ua: req.headers.get("user-agent") });
       return hub(env).fetch(req);
     }
 
@@ -47,6 +64,19 @@ function hub(env: Env) {
 
 function text(body: string, status: number) {
   return new Response(body, { status });
+}
+
+/** One structured line per event; shows up in `wrangler tail` and the dashboard's Workers Logs. */
+function log(level: "info" | "warn" | "error", msg: string, fields: Record<string, unknown>) {
+  console[level]({ msg, ...fields });
+}
+
+function clip(s: string, max = 500) {
+  return s.length > max ? s.slice(0, max) + "…" : s;
+}
+
+function clientIp(req: Request) {
+  return req.headers.get("cf-connecting-ip") ?? undefined;
 }
 
 function safeEqual(a: string, b: string) {
@@ -69,31 +99,44 @@ export class SensorHub extends DurableObject<Env> {
     this.ctx.acceptWebSocket(server);
     const recent = (await this.ctx.storage.get<FinishEvent[]>("recent")) ?? [];
     if (recent.length) server.send(JSON.stringify(recent));
+    log("info", "ws.open", { clients: this.ctx.getWebSockets().length, replayed: recent.length });
     return new Response(null, { status: 101, webSocket: client });
   }
 
+  /** Returns counts so the ingest response and logs show what actually reached browsers. */
   async publish(events: FinishEvent[]) {
     const recent = (await this.ctx.storage.get<FinishEvent[]>("recent")) ?? [];
     // Devices may resend unchanged readings; only pass on ones we haven't seen.
     const known = new Set(recent.map((e) => e.id));
     const fresh = events.filter((e) => !known.has(e.id) && known.add(e.id));
-    if (!fresh.length) return;
+    const sockets = this.ctx.getWebSockets();
+    const result = { new: fresh.length, duplicates: events.length - fresh.length, clients: 0 };
+    if (!fresh.length) return result;
+
     await this.ctx.storage.put("recent", [...recent, ...fresh].slice(-RECENT));
     const msg = JSON.stringify(fresh);
-    for (const ws of this.ctx.getWebSockets()) {
+    for (const ws of sockets) {
       try {
         ws.send(msg);
+        result.clients++;
       } catch {
         /* socket already closing */
       }
     }
+    if (!result.clients) log("warn", "publish.no_clients", { lanes: fresh.map((e) => e.lane) });
+    return result;
   }
 
   async webSocketMessage(ws: WebSocket, msg: string | ArrayBuffer) {
     if (msg === "ping") ws.send("pong");
   }
 
-  async webSocketClose(ws: WebSocket, code: number) {
+  async webSocketClose(ws: WebSocket, code: number, reason: string) {
     ws.close(code, "closing");
+    log("info", "ws.close", { code, reason, clients: this.ctx.getWebSockets().length - 1 });
+  }
+
+  async webSocketError(_ws: WebSocket, error: unknown) {
+    log("warn", "ws.error", { error: String(error) });
   }
 }

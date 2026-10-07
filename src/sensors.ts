@@ -1,6 +1,8 @@
 import { useSyncExternalStore } from "react";
 import type { FinishEvent } from "../shared/sensor";
+import { fmt } from "./logic";
 import { getActivities, stopTeam } from "./store";
+import { STAGE_LABEL } from "./types";
 
 /*
  * Live feed of finish-line triggers from the server (see worker/). Every operator tab applies
@@ -14,7 +16,14 @@ let status: SensorStatus = "connecting";
 const listeners = new Set<() => void>();
 const seen = new Set<string>();
 
+/** Console logs for the feed, filterable by "[sensors]" in devtools. */
+const log = {
+  info: (...args: unknown[]) => console.info("%c[sensors]", "color:#8b5cf6", ...args),
+  warn: (...args: unknown[]) => console.warn("[sensors]", ...args),
+};
+
 function setStatus(s: SensorStatus) {
+  if (s !== status) log.info(`status: ${status} → ${s}`);
   status = s;
   listeners.forEach((l) => l());
 }
@@ -37,20 +46,45 @@ export function useSensorStatus() {
 function apply(ev: FinishEvent) {
   if (seen.has(ev.id)) return;
   seen.add(ev.id);
-  if (location.hash.startsWith("#/display")) return;
+  const tag = `lane ${ev.lane} (${ev.device})`;
+  const skip = (why: string) => log.info(`ignored ${tag}: ${why}`, ev);
+
+  if (location.hash.startsWith("#/display")) return skip("audience display doesn't apply stops");
 
   const running = getActivities()
     .flatMap((a) => Object.values(a.stages).map((s) => ({ a, s })))
     .filter(({ s }) => s.status === "running" && s.startedAt != null)
     .sort((x, y) => y.s.startedAt! - x.s.startedAt!)[0];
-  if (!running) return;
+  if (!running) return skip("no race running");
 
   const { a, s } = running;
+  const startedAt = s.startedAt!;
   const team = s.teams[ev.lane - 1];
-  if (!team) return;
+  if (!team) return skip(`race only has ${s.teams.length} lanes`);
+  const entry = s.entries.find((e) => e.teamId === team.id);
+  if (entry?.dnf) return skip(`${team.name} is already DNF`);
+  if (entry?.finishMs != null) return skip(`${team.name} already stopped at ${fmt(entry.finishMs)}`);
+
+  // Prefer the sensor's own timestamp; fall back to when it reached the server.
   const now = Date.now();
-  const at = ev.at != null && ev.at >= s.startedAt! && ev.at <= now ? ev.at : Math.min(ev.receivedAt, now);
+  let at: number;
+  let clock: string;
+  if (ev.at != null && ev.at <= now + 1000) {
+    if (ev.at < startedAt) return skip(`fired ${fmt(startedAt - ev.at)} before the start`);
+    at = Math.min(ev.at, now);
+    clock = "sensor timestamp";
+  } else {
+    if (ev.at != null) log.warn(`${tag} timestamp is ${fmt(ev.at - now)} in the future; check the device clock`);
+    at = Math.min(ev.receivedAt, now);
+    clock = "server arrival";
+    if (at < startedAt) return skip("arrived before the start");
+  }
+
   stopTeam(a.id, s.id, team.id, at, "sensor");
+  log.info(
+    `stopped ${team.name} on ${tag} at ${fmt(at - startedAt)} (${clock}, ` +
+      `${now - ev.receivedAt}ms after the server got it) · ${a.name} / ${STAGE_LABEL[s.id]}`
+  );
 }
 
 export function connectSensors() {
@@ -63,22 +97,28 @@ export function connectSensors() {
     setStatus("connecting");
 
     ws.onopen = () => {
+      if (retry) log.info(`reconnected after ${retry} attempt(s)`);
       retry = 0;
       setStatus("online");
       ping = window.setInterval(() => ws.send("ping"), 25_000);
     };
     ws.onmessage = (m) => {
       if (m.data === "pong") return;
+      let events: FinishEvent[];
       try {
-        (JSON.parse(m.data) as FinishEvent[]).forEach(apply);
+        events = JSON.parse(m.data);
       } catch {
-        /* ignore malformed frames */
+        return log.warn("malformed frame", m.data);
       }
+      log.info(`received ${events.length} event(s)`);
+      events.forEach(apply);
     };
-    ws.onclose = () => {
+    ws.onclose = (e) => {
       clearInterval(ping);
       setStatus("offline");
-      setTimeout(open, Math.min(10_000, 500 * 2 ** retry++));
+      const delay = Math.min(10_000, 500 * 2 ** retry++);
+      log.warn(`socket closed (code ${e.code}); retrying in ${delay}ms`);
+      setTimeout(open, delay);
     };
   };
 

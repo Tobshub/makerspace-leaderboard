@@ -12,6 +12,8 @@
   "durable_objects": {
     "bindings": [{ "name": "SENSOR_HUB", "class_name": "SensorHub" }]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SensorHub"] }]
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SensorHub"] }],
+  // Keeps console output from the Worker searchable in the dashboard (Workers Logs).
+  "observability": { "enabled": true }
   // Secret: INGEST_KEY — `wrangler secret put INGEST_KEY` (locally, put it in .dev.vars)
 }
